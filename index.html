@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>こころのおみくじ 〜心拍ペーシング＆温もりの光〜</title>
+<style>
+  body {
+    font-family: sans-serif;
+    text-align: center;
+    background: #f2f7f4;
+    color: #333;
+    padding: 20px 10px;
+    transition: background 1.5s;
+  }
+  .card {
+    max-width: 420px;
+    margin: 0 auto;
+    background: white;
+    padding: 25px;
+    border-radius: 24px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+  }
+  .sensor-box {
+    background: #fafaf5;
+    border: 1px solid #eaeae0;
+    padding: 15px;
+    border-radius: 16px;
+    margin-bottom: 20px;
+  }
+  .btn-connect {
+    background: #4a7c59;
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  .heart {
+    font-size: 36px;
+    display: inline-block;
+    transition: transform 0.1s;
+    filter: drop-shadow(0 0 8px rgba(226, 114, 91, 0.6));
+  }
+  .pulsing { animation: pulse 0.8s infinite alternate ease-in-out; }
+  @keyframes pulse { 0% { transform: scale(1); } 100% { transform: scale(1.3); } }
+  .btn-main {
+    width: 100%;
+    padding: 14px;
+    font-size: 18px;
+    font-weight: bold;
+    background: #6b8e23;
+    color: white;
+    border: none;
+    border-radius: 14px;
+    cursor: pointer;
+  }
+  #result {
+    display: none;
+    margin-top: 20px;
+    padding: 18px;
+    background: #fcfcf8;
+    border-radius: 14px;
+    border: 1px solid #eee;
+    text-align: left;
+  }
+  .survey-box {
+    display: none;
+    margin-top: 20px;
+    border-top: 1px dashed #ccc;
+    text-align: left;
+    padding-top: 10px;
+  }
+  .survey-btn {
+    margin: 3px;
+    padding: 8px 12px;
+    font-size: 12px;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    background: #fff;
+    cursor: pointer;
+  }
+  .survey-btn.selected { background: #6b8e23; color: white; border-color: #6b8e23; }
+  #send-btn {
+    width: 100%;
+    margin-top: 15px;
+    padding: 12px;
+    background: #3e5323;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h2 style="color:#3e5323; margin-bottom:5px;">こころのおみくじ</h2>
+  <p style="font-size:12px; color:#777; margin-top:0;">〜 温もりの光と心拍ペーシング 〜</p>
+
+  <div class="sensor-box">
+    <button id="connect-serial" class="btn-connect">🔌 センサーとLEDを接続</button>
+    <div style="margin-top:15px;">
+      <span id="heart" class="heart">❤️</span>
+      <span id="bpm-val" style="font-size:28px; font-weight:bold; color:#e2725b; margin-left:10px;">72</span> <small>BPM</small>
+    </div>
+    <div style="margin-top:10px; font-size:12px; color:#555;">
+      <label><input type="checkbox" id="bgm-check"> 🎵 癒やしのアンビエントBGMを鳴らす</label>
+    </div>
+    <div style="font-size:10px; color:#aaa; margin-top:10px;">
+      テスト用BPM: <input type="range" id="bpm-slider" min="50" max="120" value="72" style="width:70%;">
+    </div>
+  </div>
+
+  <button id="btn-omikuji" class="btn-main">おみくじを引く</button>
+
+  <div id="result">
+    <h3 id="res-fortune" style="margin:0 0 10px 0; color:#2b3a1a; font-size:28px;"></h3>
+    <p id="res-message" style="font-size:14px; line-height:1.7; color:#444; margin:0;"></p>
+  </div>
+
+  <div id="survey-area" class="survey-box">
+    <p style="font-size:12px; font-weight:bold; color:#555;">1. 引く前の気分は？</p>
+    <button class="survey-btn" data-type="pre" data-val="おだやか">おだやか 🍃</button>
+    <button class="survey-btn" data-type="pre" data-val="もやもや">もやもや ☁️</button>
+    <button class="survey-btn" data-type="pre" data-val="緊張">緊張・不安 💓</button>
+
+    <p style="font-size:12px; font-weight:bold; color:#555;">2. 引いた後の心境は？</p>
+    <button class="survey-btn" data-type="post" data-val="ほっとした">ほっとした 🍵</button>
+    <button class="survey-btn" data-type="post" data-val="軽くなった">心が軽くなった ✨</button>
+    <button class="survey-btn" data-type="post" data-val="変化なし">変化なし 😐</button>
+
+    <button id="send-btn" disabled>回答を送信して終了</button>
+  </div>
+</div>
+
+<script>
+  const GAS_URL = "https://script.google.com/a/macros/gse.okayama-c.ed.jp/s/AKfycbwES2rHyO9XO8bn_SWhu-lIvzxGGZZBJDECadeovHbog5mgEke0b-ZpNyYjEyfwOUPW_A/exec";
+
+  const testGroup = Math.random() < 0.5 ? "A" : "B";
+  let currentBpm = 72;
+  let fortune = "", message = "", preMood = "", postMood = "";
+  let bgmInterval = null;
+
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const notes = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25];
+
+  function playAmbientNote() {
+    if (!document.getElementById("bgm-check").checked) return;
+    if (ctx.state === 'suspended') ctx.resume();
+    
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const freq = notes[Math.floor(Math.random() * notes.length)];
+    
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    gain.gain.setValueAtTime(0.03, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 3.0);
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 3.0);
+  }
+
+  document.getElementById("bgm-check").addEventListener("change", (e) => {
+    if (e.target.checked) bgmInterval = setInterval(playAmbientNote, 1200);
+    else clearInterval(bgmInterval);
+  });
+
+  function updateBpm(bpm) {
+    currentBpm = bpm;
+    document.getElementById("bpm-val").innerText = bpm;
+    const heart = document.getElementById("heart");
+    heart.style.animationDuration = `${(60/bpm).toFixed(2)}s`;
+    heart.classList.add("pulsing");
+  }
+
+  document.getElementById("bpm-slider").addEventListener("input", (e) => updateBpm(parseInt(e.target.value)));
+
+  document.getElementById("connect-serial").addEventListener("click", async () => {
+    try {
+      const port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 9600 });
+      alert("センサーとLEDの接続が完了しました！");
+      const textDecoder = new TextDecoderStream();
+      port.readable.pipeTo(textDecoder.writable);
+      const reader = textDecoder.readable.getReader();
+      let buffer = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += value;
+        let lines = buffer.split("\n");
+        buffer = lines.pop();
+        for (let line of lines) {
+          let bpm = parseInt(line.trim());
+          if (!isNaN(bpm) && bpm >= 40 && bpm <= 180) updateBpm(bpm);
+        }
+      }
+    } catch (e) { alert("接続エラーまたはキャンセルされました。"); }
+  });
+
+  document.getElementById("btn-omikuji").addEventListener("click", () => {
+    playAmbientNote();
+    if (testGroup === "A") {
+      fortune = "吉 👍";
+      message = "普通の一日になりそうです。落ち着いて過ごしましょう。";
+    } else {
+      if (currentBpm > 85) {
+        document.body.style.background = "#eaf2e8";
+        fortune = "末吉 🌿";
+        message = "【心拍高め：リラックスサイン】<br>少し緊張しているかもしれません。手元のあたたかい光を感じながら深呼吸をし、自分を優しく労わりましょう。";
+      } else {
+        document.body.style.background = "#fff9e6";
+        fortune = "大吉 🎉";
+        message = "【心拍良好：ベストバランス】<br>温かい光と鼓動が綺麗なリズムを奏でています。安心して自分のペースで進んでいきましょう。";
+      }
+    }
+    document.getElementById("res-fortune").innerText = fortune;
+    document.getElementById("res-message").innerHTML = message;
+    document.getElementById("result").style.display = "block";
+    document.getElementById("survey-area").style.display = "block";
+  });
+
+  document.querySelectorAll(".survey-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const type = e.target.getAttribute("data-type");
+      const val = e.target.getAttribute("data-val");
+      document.querySelectorAll(`.survey-btn[data-type="${type}"]`).forEach(b => b.classList.remove("selected"));
+      e.target.classList.add("selected");
+      if (type === "pre") preMood = val;
+      if (type === "post") postMood = val;
+      if (preMood && postMood) document.getElementById("send-btn").disabled = false;
+    });
+  });
+
+  document.getElementById("send-btn").addEventListener("click", () => {
+    const btn = document.getElementById("send-btn");
+    btn.disabled = true;
+    btn.innerText = "送信中...";
+    const payload = { group: testGroup, bpm: currentBpm, fortune: fortune, message: message.replace(/<br>/g, " "), preMood: preMood, postMood: postMood };
+    
+    fetch(GAS_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+      .then(() => {
+        btn.innerText = "送信完了！ありがとうございました。";
+        setTimeout(() => { document.getElementById("survey-area").style.display = "none"; }, 3000);
+      })
+      .catch(() => { btn.innerText = "送信エラーが発生しました"; });
+  });
+
+  updateBpm(72);
+</script>
+</body>
+</html>
